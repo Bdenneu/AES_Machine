@@ -1,7 +1,37 @@
 from polynom import *
 import binascii
+
+class LengthError(Exception):
+	pass
+class ModeError(Exception):
+	pass
+
+Authorized_mode = ["ECB","CBC"]
 class AES_perso:
-	def __init__(self,key,rounds):		
+	def __init__(self,mode,key,iv="",rounds=10):	
+		if len(key) == 32:
+			raise LengthError("Length of key must be 32")
+			del self
+			return 	
+		try:
+			val = int(rounds) == rounds
+			if not(val):
+				raise TypeError("Rounds must be an integer")
+				del self
+				return
+		except:
+			raise TypeError("Rounds must be an integer")
+			del self
+			return
+
+		if not(mode in Authorized_mode):
+			raise ModeError("Existing mode: {}".format(", ".join(Authorized_mode)))
+			del self
+			return			
+
+		if mode == "CBC":
+			if len(iv) != 32:
+				raise LengthError("Length of iv must be 32")		
 		self.subbytes_dict={	'00':'63','01':'7c','02':'77','03':'7b','04':'f2','05':'6b','06':'6f','07':'c5','08':'30','09':'01','0a':'67',
 					'0b':'2b','0c':'fe','0d':'d7','0e':'ab','0f':'76','10':'ca','11':'82','12':'c9','13':'7d','14':'fa','15':'59',
 					'16':'47','17':'f0','18':'ad','19':'d4','1a':'a2','1b':'af','1c':'9c','1d':'a4','1e':'72','1f':'c0','20':'b7',
@@ -26,20 +56,36 @@ class AES_perso:
 					'e7':'94','e8':'9b','e9':'1e','ea':'87','eb':'e9','ec':'ce','ed':'55','ee':'28','ef':'df','f0':'8c','f1':'a1',
 					'f2':'89','f3':'0d','f4':'bf','f5':'e6','f6':'42','f7':'68','f8':'41','f9':'99','fa':'2d','fb':'0f','fc':'b0',
 					'fd':'54','fe':'bb','ff':'16'}	
+		self.iv = iv
+		self.mode = mode
 		self.Rcon = False
 		self.message = False
 		self.rounds = rounds
 		self.keys = [self.ArrayToMat([key[2*i:2*(i+1)] for i in range(len(key)//2)],4)]
 		self.primaryKey = self.keys
+	
+	def __repr__(self):
+		key = ""
+		for i in self.primaryKey[0]:
+			for j in i:
+				key += j	
+		return "AES Machine\nmode: {}\nkey: {}".format(self.mode,"".join(key))
 
 	def digest(self,line):
 		if len(line) % 32 == 0 and len(line) > 0:
 			res = ""
+			first = True
 			for block in [line[32*i:32*(i+1)] for i in range(len(line)//32)]:
+				if self.mode == "CBC" and first:
+					first = False
+					block = self.XorStrings(block,self.iv)
+				elif self.mode == "CBC":
+					block = self.XorStrings(block,data)
+
 				self.Rcon = False
 				self.keys = self.primaryKey
 				data = self.TransposeMat(self.ArrayToMat([block[2*i:2*(i+1)] for i in range(len(block)//2)],4))
-				for i in range(self.rounds):
+				for i in range(self.rounds-1):
 					data = self.AddRoundKey(data)
 					data = self.SubBytes(data)
 					data = self.ShiftRows(data)
@@ -53,8 +99,12 @@ class AES_perso:
 			return(res)
 		else:	
 			print("La longueur doit être un multiple de 32")
-			return False
 
+	def XorStrings(self,line1,line2):
+		if len(line1) != len(line2):
+			return False		
+		return "".join([hex(int(i,16)^int(j,16))[2:] for i,j in zip(line1,line2)])
+		
 	def ArrayToMat(self,line,w):
 		if len(line)%w != 0:
 			return False
